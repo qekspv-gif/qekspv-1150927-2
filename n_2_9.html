@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-2-9 分裝與平分操作演示</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 & ReactDOM 18 CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel 進行 JSX 即時編譯 -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- 用 SVG 自行封裝原本的 Lucide 圖標，確保完全不依賴外部 icon 庫包，加載更穩定 ---
+    function PlayIcon({ size = 20, className = "" }) {
+      return (
+        <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="6 3 20 12 6 21 6 3"></polygon>
+        </svg>
+      );
+    }
+
+    function PauseIcon({ size = 20, className = "" }) {
+      return (
+        <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+          <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+        </svg>
+      );
+    }
+
+    function RotateCcwIcon({ size = 20, className = "" }) {
+      return (
+        <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <polyline points="3 3 3 8 8 8"></polyline>
+        </svg>
+      );
+    }
+
+    function InfoIcon({ size = 20, className = "" }) {
+      return (
+        <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+      );
+    }
+
+    function SettingsIcon({ size = 20, className = "" }) {
+      return (
+        <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      );
+    }
+
+    function App() {
+      const [n1, setN1] = useState(3); // 每份數量 (1~5)
+      const [n2, setN2] = useState(4); // 總共份數/組數 (1~5)
+      const [op, setOp] = useState(1); // 1 為「分裝」模式, -1 為「平分」模式
+      const total = n1 * n2;
+      
+      const [t, setT] = useState(0); // 操作進度 t, 從 0 到 total
+      const [isPlaying, setIsPlaying] = useState(false);
+      const [playDir, setPlayDir] = useState(1);
+      const animationRef = useRef(null);
+
+      // 動態播放邏輯
+      useEffect(() => {
+        if (isPlaying) {
+          const animate = () => {
+            setT((prevT) => {
+              let nextT = prevT + playDir * 0.08; // 適合國小低年級觀察的速度
+              if (nextT >= total) {
+                setPlayDir(-1);
+                return total;
+              }
+              if (nextT <= 0) {
+                setPlayDir(1);
+                return 0;
+              }
+              return parseFloat(nextT.toFixed(2));
+            });
+            animationRef.current = requestAnimationFrame(animate);
+          };
+          animationRef.current = requestAnimationFrame(animate);
+        } else {
+          if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        }
+        return () => {
+          if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        };
+      }, [isPlaying, playDir, total]);
+
+      const handleReset = () => {
+        setT(0);
+        setIsPlaying(false);
+        setPlayDir(1);
+      };
+
+      const handleN1Change = (e) => {
+        let val = Number(e.target.value) || 0;
+        if (val < 1) val = 1;
+        if (val > 5) val = 5; // 限制單次最大5個
+        setN1(val);
+        handleReset();
+      };
+
+      const handleN2Change = (e) => {
+        let val = Number(e.target.value) || 0;
+        if (val < 1) val = 1;
+        if (val > 5) val = 5; // 限制最多5個盒子
+        setN2(val);
+        handleReset();
+      };
+
+      const handleOpChange = (e) => {
+        setOp(Number(e.target.value));
+        handleReset();
+      };
+
+      // --- 產生所有物品 (統一為可愛的小糖果/圓球) ---
+      const getItems = () => {
+        const items = [];
+        for (let i = 0; i < total; i++) {
+          items.push({ id: `item-${i}` });
+        }
+        return items;
+      };
+
+      const items = getItems();
+
+      // --- 格式化操作總結說明 ---
+      const formatClassification = (num1, num2, operation) => {
+        if (operation === 1) {
+          return `【分裝】每 ${num1} 個裝一盒，共裝了 ${num2} 盒`;
+        } else {
+          return `【平分】平分給 ${num2} 個盒子，每盒分到 ${num1} 個`;
+        }
+      };
+
+      // --- 座標與分裝區間運算 ---
+      const svgWidth = 400;
+      const svgHeight = 650;
+
+      // 計算未分配區 (下方) 物品的位置
+      const getUnsortedPos = (index) => {
+        const row = Math.floor(index / 7);
+        const col = index % 7;
+        return { x: 45 + col * 45, y: 390 + row * 45 };
+      };
+
+      // 計算每個盒子的基準位置 (最多支援 5 個盒子，分兩排)
+      const getBoxPos = (boxIdx) => {
+        if (boxIdx < 3) {
+          return { x: 20 + boxIdx * 120, y: 60 };
+        } else {
+          return { x: 80 + (boxIdx - 3) * 120, y: 180 };
+        }
+      };
+
+      // 繪製手繪感盒子
+      const renderCreativeFrame = (boxIdx, themeColor) => {
+        const pos = getBoxPos(boxIdx);
+        return (
+          <g key={`box-${boxIdx}`} transform={`translate(${pos.x}, ${pos.y})`}>
+            <rect x="0" y="0" width="110" height="90" fill="white" stroke={themeColor} strokeWidth="3" strokeDasharray="6,4" rx="12" />
+            <rect x="15" y="-14" width="80" height="24" fill={themeColor} rx="6" />
+            <text x="55" y="3" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">盒子 {boxIdx + 1}</text>
+          </g>
+        );
+      };
+
+      // 決定當前操作狀態的提示文字
+      const getStatus = () => {
+        if (t === 0) return { text: "尚未開始，物品都在下方的混合區", color: "text-indigo-600", phase: 0 };
+        if (t === total) return { text: "操作完成！觀察看看兩種分法結果一樣嗎？", color: "text-purple-600", phase: 3 };
+        
+        if (playDir === 1) {
+          return { 
+            text: op === 1 ? "【分裝中】正在把一個盒子裝滿..." : "【平分中】正在輪流發給每一個盒子...", 
+            color: "text-green-600", 
+            phase: 1 
+          };
+        } else {
+          return { text: "正在退回物品...", color: "text-orange-500", phase: 2 };
+        }
+      };
+
+      const status = getStatus();
+
+      return (
+        <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 font-sans">
+          
+          {/* 左側控制與解說面板 */}
+          <div className="w-full md:w-1/2 p-6 md:p-8 bg-white shadow-md flex flex-col gap-6 overflow-y-auto">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-800 mb-2 border-b-2 border-indigo-500 pb-2">
+                N-2-9 解題：分裝與平分
+              </h1>
+              <p className="text-gray-600 text-sm">以操作活動為主・除法前置經驗</p>
+            </div>
+
+            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-100">
+              <h2 className="font-semibold text-indigo-800 mb-2 flex items-center gap-2">
+                <InfoIcon size={20} />
+                課綱對應說明
+              </h2>
+              <p className="text-gray-700 leading-relaxed text-sm mb-2">
+                <strong>核心目標：</strong>理解分裝與平分之意義與方法。引導學生在解題過程，發現問題和乘法模式的關連。
+              </p>
+              <p className="text-gray-700 leading-relaxed text-sm text-red-600">
+                <strong>備註提醒：</strong>本條目非除法教學，不列除式，不用「除」的名稱。限相當於整除的問題。教學應在「十十乘法」範圍中進行。
+              </p>
+            </div>
+
+            {/* 互動控制區 */}
+            <div className="bg-gray-100 rounded-lg p-5 border border-gray-200 shadow-inner">
+              <div className="flex justify-between items-end mb-4">
+                <label className="font-bold text-gray-700">操作進度 (已處理個數):</label>
+                <span className="text-2xl font-mono font-bold text-indigo-600 bg-white px-3 py-1 rounded shadow-sm">
+                  {Math.floor(t)} / {total}
+                </span>
+              </div>
+              
+              <input 
+                type="range" 
+                min="0" 
+                max={total} 
+                step="0.1" 
+                value={t} 
+                onChange={(e) => setT(parseFloat(e.target.value))}
+                className="w-full h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-6"
+              />
+
+              <div className="flex gap-3 justify-center">
+                <button 
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-medium transition shadow-md"
+                >
+                  {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+                  {isPlaying ? "暫停" : "自動播放"}
+                </button>
+                <button 
+                  onClick={handleReset}
+                  className="flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-6 py-2 rounded-full font-medium transition shadow-sm"
+                >
+                  <RotateCcwIcon size={20} />
+                  重置
+                </button>
+              </div>
+            </div>
+
+            {/* 觀察與解說區 */}
+            <div className="flex-1 flex flex-col gap-4">
+              <div className={`p-5 rounded-lg border-2 ${status.phase === 3 ? 'border-purple-400 bg-purple-50' : status.phase === 1 ? 'border-indigo-400 bg-indigo-50' : status.phase === 2 ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-white'} transition-colors duration-300`}>
+                <h3 className="font-bold text-gray-800 mb-2">當前操作狀態：</h3>
+                <p className={`text-2xl font-bold ${status.color} transition-colors duration-300`}>
+                  {status.text}
+                </p>
+                {t !== 0 && (
+                  <div className="mt-3 text-gray-600 font-mono text-sm bg-white/60 p-2 rounded inline-block">
+                    總數量 = {n1} × {n2} = {total} 個
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                <h3 className="font-bold text-gray-800 mb-2">引導提問與觀察：</h3>
+                <ul className="list-disc pl-5 text-gray-700 space-y-2 text-sm">
+                  <li>點選右上方切換<strong>「分裝」</strong>與<strong>「平分」</strong>模式。</li>
+                  <li>觀察<strong>「分裝」</strong>動畫：是不是先裝滿一個盒子，再裝下一個？</li>
+                  <li>觀察<strong>「平分」</strong>動畫：是不是像發撲克牌一樣，每人輪流拿一個？</li>
+                  <li>最後大家分到的數量一樣嗎？這和我們學過的乘法有什麼關係呢？</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {}
+          {/* 右側圖形與自訂面板 */}
+          <div className="w-full md:w-1/2 bg-gray-200 p-4 md:p-8 flex flex-col items-center relative overflow-y-auto">
+            
+            {/* 自訂分類輸入區 */}
+            <div className="bg-white w-full max-w-[400px] p-5 rounded-xl shadow-md border border-gray-300 mb-4">
+              <h2 className="font-semibold text-gray-800 mb-3 flex items-center gap-2 border-b pb-2">
+                <SettingsIcon size={18} className="text-gray-600" />
+                1. 設定操作參數與模式
+              </h2>
+              
+              <table className="w-full mb-4 text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-100 text-gray-700 text-sm">
+                    <th className="py-2 px-4 border border-gray-200 font-medium w-1/2">參數</th>
+                    <th className="py-2 px-4 border border-gray-200 font-medium">數量與模式</th>
+                  </tr>
+                </thead>
+                <tbody className="text-lg font-mono">
+                  <tr>
+                    <td className="py-2 px-4 border border-gray-200 text-indigo-700 font-bold bg-indigo-50/30 text-center text-sm font-sans">
+                      每份數量<br/><span className="text-xs text-gray-500 font-normal">(1~5 個)</span>
+                    </td>
+                    <td className="py-1 px-2 border border-gray-200">
+                      <input type="number" min="1" max="5" value={n1} onChange={handleN1Change} className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 px-4 border border-gray-200 text-indigo-700 font-bold bg-indigo-50/30 text-center text-sm font-sans">
+                      總共份數 (組數)<br/><span className="text-xs text-gray-500 font-normal">(1~5 份)</span>
+                    </td>
+                    <td className="py-1 px-2 border border-gray-200">
+                      <input type="number" min="1" max="5" value={n2} onChange={handleN2Change} className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 px-4 border border-gray-200 text-indigo-700 font-bold bg-indigo-50/30 text-center text-sm font-sans">
+                      操作模式
+                    </td>
+                    <td className="py-1 px-2 border border-gray-200">
+                      <select value={op} onChange={handleOpChange} className="w-full px-2 py-2 border border-gray-300 rounded text-sm font-sans focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                        <option value={1}>分裝 (一次拿固定數量)</option>
+                        <option value={-1}>平分 (輪流一個一個發)</option>
+                      </select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="bg-indigo-50 text-indigo-900 p-3 rounded-lg border border-indigo-200 font-sans text-center shadow-inner">
+                <span className="text-xs text-indigo-600 block mb-1">目前總數：{total} 個。結果預覽：</span>
+                <span className="text-sm font-bold">{formatClassification(n1, n2, op)}</span>
+              </div>
+            </div>
+
+            {/* 圖形顯示區：盒子與物品 */}
+            <div className="bg-[#f1f5f9] rounded-xl shadow-lg border border-gray-300 overflow-hidden relative w-full max-w-[400px]">
+              
+              <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto">
+                <defs>
+                  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.2" />
+                  </filter>
+                </defs>
+
+                {/* 背景與標題 */}
+                <rect x="0" y="0" width={svgWidth} height={svgHeight} fill="#f8fafc" />
+                <text x="200" y="35" textAnchor="middle" fill="#475569" fontSize="18" fontWeight="bold">我的分裝與平分操作台</text>
+
+                {/* 繪製指定的盒子數量 */}
+                {[...Array(n2)].map((_, idx) => renderCreativeFrame(idx, "#6366f1"))}
+
+                {/* 未分配收集區 (下方) */}
+                <rect x="25" y="330" width="350" height="290" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="2" strokeDasharray="6,6" rx="12" />
+                <text x="200" y="360" textAnchor="middle" fill="#64748b" fontSize="15" fontWeight="bold">📦 待處理物品區 (總共 {total} 個)</text>
+
+                {/* 繪製物品 */}
+                {items.map((item, i) => {
+                  // 1. 計算該物品的目標盒子與盒子內的排序
+                  let targetBoxIdx, idxInBox;
+
+                  if (op === 1) {
+                    // 分裝模式：裝滿一個盒子(容量為 n1)，再裝下一個
+                    targetBoxIdx = Math.floor(i / n1);
+                    idxInBox = i % n1;
+                  } else {
+                    // 平分模式：輪流發給 n2 個盒子
+                    targetBoxIdx = i % n2;
+                    idxInBox = Math.floor(i / n2);
+                  }
+
+                  // 2. 決定動態起點與終點
+                  const startPos = getUnsortedPos(i);
+                  const boxPos = getBoxPos(targetBoxIdx);
+                  // 盒子內部的相對位置配置 (九宮格排列)
+                  const targetPos = {
+                    x: boxPos.x + 25 + (idxInBox % 3) * 30,
+                    y: boxPos.y + 25 + Math.floor(idxInBox / 3) * 28
+                  };
+
+                  // 3. 計算平移動畫插值 (利用 t 的連續性製造順序感)
+                  const p = Math.min(Math.max(t - i, 0), 1); 
+                  const currentX = startPos.x + (targetPos.x - startPos.x) * p;
+                  const currentY = startPos.y + (targetPos.y - startPos.y) * p;
+
+                  // 統一的物品樣式 (例如：金黃色小糖果)
+                  const itemFill = '#f59e0b';
+                  const itemStroke = '#b45309';
+
+                  return (
+                    <g key={item.id} transform={`translate(${currentX}, ${currentY})`} filter="url(#shadow)">
+                      <circle cx="0" cy="0" r="13" fill={itemFill} stroke={itemStroke} strokeWidth="2" />
+                      {/* 立體亮點與笑臉 */}
+                      <circle cx="-4" cy="-4" r="3" fill="white" opacity="0.4" />
+                      <circle cx="-3" cy="1" r="1.5" fill="white" />
+                      <circle cx="3" cy="1" r="1.5" fill="white" />
+                      <path d="M -2 4 Q 0 7 2 4" stroke="white" strokeWidth="1" fill="none" />
+                    </g>
+                  );
+                })}
+              </svg>
+
+              {/* 浮動提示框：當前進度 */}
+              {t !== 0 && t !== total && (
+                <div className="absolute top-2 left-2 bg-white/95 backdrop-blur px-3 py-2 rounded-lg shadow-md border border-indigo-200 text-sm">
+                  <span className="text-gray-600 block text-xs mb-1">正在移動第 {Math.ceil(t)} 個...</span>
+                  <div className="font-sans text-indigo-700 font-bold text-sm">
+                    目前進度：{Math.floor(t)} / {total}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
